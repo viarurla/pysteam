@@ -1,12 +1,17 @@
 from typing import List
 
-from fastapi import FastAPI, Depends, HTTPException
+from celery.result import AsyncResult
+from fastapi import FastAPI, Depends, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from server import crud, models, schemas
-from server.database import SessionLocal, engine
-from server.services import SteamApiService
+import crud
+import models
+import schemas
+from database import SessionLocal, engine
+from services import SteamApiService
+import worker as tasks
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -26,6 +31,10 @@ origins = [
     "http://localhost",
     "http://localhost:8080",
     "http://localhost:3000",
+    "http://localhost:6379",
+    "http://localhost:5555",
+    "http://localhost:5556",
+    "0.0.0.0"
 ]
 
 app.add_middleware(
@@ -44,6 +53,7 @@ drop_on_start = True
 
 @app.on_event("startup")
 async def startup_event():
+    # update_steam_task()
     pass
 
 
@@ -66,15 +76,18 @@ def get_users(db: Session = Depends(get_db)):
 
 @app.get("/apps/{appid}", response_model=schemas.SteamApp)
 def get_app(appid: int, db: Session = Depends(get_db)):
-    app = crud.get_app(db, appid)
-    if app is None:
+    steam_app = crud.get_app(db, appid)
+    if steam_app is None:
         raise HTTPException(status_code=404, detail="App not found")
-    return app
+    return steam_app
 
 
 @app.get("/apps", response_model=List[schemas.SteamApp])
-async def get_apps(db: Session = Depends(get_db)):
-    apps = crud.get_apps(db)
+async def get_apps(like: str = None, db: Session = Depends(get_db)):
+    if like is not None:
+        apps = crud.get_apps_like_name(db, like)
+    else:
+        apps = crud.get_apps(db)
     return apps
 
 
@@ -100,11 +113,34 @@ async def update_apps(user_id: int, db: Session = Depends(get_db)):
 async def update_owned_apps():
     return {"Not": "Implemented"}
 
-# @app.post("/isloggedin")
-# async def is_logged_in():
-#     result: bool = scs.is_logged_in(db.get_user())
-#     json_content = jsonable_encoder(result)
-#     return JSONResponse(json_content)
+
+@app.post("/soft-login")
+async def soft_login(user: schemas.User):
+    task = tasks.soft_login_task.delay(user.dict())
+    return JSONResponse({"task_id": task.id})
+
+
+@app.post("/login")
+async def login(request: schemas.LoginRequest):
+    task = tasks.login_task.delay(request.dict())
+    return JSONResponse({"task_id": task.id})
+
+
+@app.post("/download")
+def download(request: schemas.DownloadRequest):
+    task = tasks.download_app_task.delay(request.dict())
+    return JSONResponse({"task_id": task.id})
+
+
+@app.get("/tasks/{task_id}")
+def get_status(task_id):
+    task_result = AsyncResult(task_id)
+    result = {
+        "task_id": task_id,
+        "task_status": task_result.status,
+        "task_result": task_result.result
+    }
+    return JSONResponse(result)
 #
 #
 # @app.post("/login")

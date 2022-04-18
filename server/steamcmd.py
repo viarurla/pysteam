@@ -1,85 +1,64 @@
-import sys
-import os
-import platform
-import zipfile
-import tarfile
 import subprocess
-from pathlib import Path
-
-from urllib.request import urlretrieve
-
 
 # The following code is a modified version of https://github.com/f0rkz/pysteamcmd
-from server import schemas
+import schemas
 
+generic_failure = "SteamCMD failed."
 
-class SteamcmdException(Exception):
-
+class SteamCMDException(Exception):
     pass
 
 
-class Steamcmd(object):
+class SteamCMD(object):
     def __init__(self, install_path):
-
         self.install_path = install_path
-        if not os.path.isdir(self.install_path):
-            raise SteamcmdException('Install path is not a directory or does not exist: {}'.format(self.install_path))
-
-        self.platform = platform.system()
-        if self.platform == 'Windows':
-            self.steamcmd_exe = Path(self.install_path, 'steamcmd.exe')
-
-        elif self.platform == 'Linux':
-            self.steamcmd_exe = Path(self.install_path, 'steamcmd.sh')
-
-        elif self.platform == "Darwin":
-            self.steamcmd_exe = Path(self.install_path, 'steamcmd.sh')
-
-        else:
-            raise SteamcmdException(
-                'The operating system is not supported. Expected Linux or Windows, received: {}'.format(self.platform)
-            )
 
     def soft_login(self, username: str):
         params = [
-            self.steamcmd_exe,
+            "/usr/games/steamcmd",
             f'+login {username}',
             '+quit'
         ]
         try:
             return subprocess.check_call(params)
         except subprocess.CalledProcessError:
-            raise SteamcmdException("Steamcmd was unable to run. Did you install your 32-bit libraries?")
+            raise SteamCMDException(generic_failure)
 
-    def login(self, user: schemas.User, creds: schemas.LoginRequest):
+    def update_steam(self):
         params = [
-            self.steamcmd_exe,
-            f'+login {user.username}',
-            f'{creds.password}',
-            f'{creds.auth}'
+            "/usr/games/steamcmd",
             '+quit'
         ]
         try:
             return subprocess.check_call(params)
         except subprocess.CalledProcessError:
-            raise SteamcmdException("Steamcmd was unable to run. Did you install your 32-bit libraries?")
+            raise SteamCMDException(generic_failure)
 
-    def install_gamefiles(self, username: str, gameid, game_install_dir, validate=False):
-        if validate:
-            validate = 'validate'
-        else:
-            validate = None
+    def login(self, login: schemas.LoginRequest):
+        params = [
+            "/usr/games/steamcmd",
+            f'+login {login.user.username}'
+            f' {login.password}'
+            f' {login.auth}',
+            '+quit'
+        ]
+        try:
+            return subprocess.check_call(params)
+        except subprocess.CalledProcessError:
+            raise SteamCMDException(generic_failure)
+
+    def install_gamefiles(self, request: schemas.DownloadRequest, game_install_dir: str):
 
         params = [
-            self.steamcmd_exe,
+            "/usr/games/steamcmd",
+            f'+@sSteamCmdForcePlatformType {request.platform.lower()}',
             f'+force_install_dir {game_install_dir}',
-            f'+login {username}',
-            f'+app_update {gameid}',
-            f'{validate}',
+            f'+login {request.user.username}',
+            f'+app_update {request.steam_app.appid}',
             '+quit',
         ]
 
         try:
             return subprocess.check_call(params)
         except subprocess.CalledProcessError:
-            raise SteamcmdException("Steamcmd was unable to run. Did you install your 32-bit libraries?")
+            raise SteamCMDException(generic_failure)

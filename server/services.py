@@ -34,8 +34,8 @@ class SteamApiService(object):
         endpoint: str = self._endpoints.get_app_details(appid)
         r = requests.get(endpoint)
 
-        record = r.json()[str(appid)]['data']
-        app_details = schemas.SteamAppInfoCreate(**record)
-
-        return app_details
+        record = r.json()[str(appid)]
+        if record['success'] is not False:
+            app_details = schemas.SteamAppInfoCreate(**record['data'])
+            return app_details
 

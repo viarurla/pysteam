@@ -73,7 +73,7 @@ def get_owned_apps(db: Session, user_id: int, skip: int = 0, limit: int = 100):
     return db.query(models.SteamApp).offset(skip).limit(limit).filter(models.SteamApp.user_id == user_id)
 
 
-def get_app(db: Session, appid: int):
+def get_app(db: Session, appid: int) -> models.SteamApp:
     return db.query(models.SteamApp).get(appid)
 
 

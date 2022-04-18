@@ -1,9 +1,6 @@
+from typing import Any
+
 from pydantic import BaseModel
-
-
-class LoginRequest(BaseModel):
-    password: str
-    auth: str
 
 
 class SteamAppBase(BaseModel):
@@ -17,6 +14,7 @@ class SteamAppCreate(SteamAppBase):
 
 class SteamApp(SteamAppBase):
     user_id: int = None
+
     class Config:
         orm_mode = True
 
@@ -46,8 +44,10 @@ class SteamAppInfoBase(BaseModel):
     about_the_game: str | None = None
     header_image: str | None = None
 
+
 class SteamAppInfoCreate(SteamAppInfoBase):
     platforms: PlatformCreate
+
 
 class SteamAppInfo(SteamAppInfoBase):
     platforms: Platform
@@ -74,3 +74,15 @@ class User(UserBase):
 
 class UserCreate(UserBase):
     pass
+
+
+class LoginRequest(BaseModel):
+    user: User
+    password: str
+    auth: str
+
+
+class DownloadRequest(BaseModel):
+    user: User
+    steam_app: SteamApp
+    platform: str

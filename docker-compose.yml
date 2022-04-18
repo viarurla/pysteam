@@ -1,14 +1,30 @@
-version '3.8'
+version: "3.9"
 
 services:
 
-  web:
-    build: ./server
+  client:
+    build:
+      context: ./
+      dockerfile: .docker/DockerfileClient
     ports:
-      - 8004:8000
-    command: uvicorn main:app --host 0.0.0 --reload
+      - "3000:3000"
     volumes:
-      - ./project:/usr/src/app
+      - ./client:/usr/src/app/client
+    depends_on:
+      - redis
+      - worker
+      - server
+
+  server:
+    build:
+      context: ./
+#    platform: linux/x86_64
+      dockerfile: .docker/DockerfileServer
+    ports:
+      - "8004:8000"
+    command: python3.10 -m uvicorn main:app --host 0.0.0.0 --reload
+    volumes:
+      - ./server:/usr/src/app/server
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
@@ -16,16 +32,37 @@ services:
       - redis
 
   worker:
-    build: ./server
-    command: celery worker --app=worker.celery --loglevel=info
+    build:
+      context: ./
+      dockerfile: .docker/DockerfileWorker
+    platform: linux/x86_64
+    command: python3.10 -m celery -A worker.celery worker --loglevel=info
     volumes:
-      - ./project:/usr/src/app
+      - ./project:/usr/src/app/server
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
-      - web
+      - server
       - redis
 
   redis:
     image: redis:6-alpine
+    ports:
+      - "6379:6379"
+
+  dashboard:
+#    platform: linux/x86_64
+    build:
+      context: ./
+      dockerfile: .docker/DockerfileDashboard
+    command: python3.10 -m celery -A worker.celery flower --port=5555 --broker=redis://redis:6379/0
+    ports:
+      - "5556:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - server
+      - redis
+      - worker
